@@ -1,9 +1,10 @@
 use std::{thread::sleep, time::Duration};
 
-use log::{error, info, warn};
+//use log::{error, info, warn};
 use quick_xml::de::from_str;
 use reqwest::blocking::{self, Response};
 use serde::Deserialize;
+use std::error::Error;
 
 #[derive(Deserialize)]
 pub struct Item {
@@ -29,31 +30,28 @@ pub struct Rss {
     pub channel: Channel,
 }
 
-fn get(url: &str, mut retry: i8) -> Response {
-    blocking::get(url).unwrap_or_else(|error| {
-        error!("请求失败，请检查配置和网络!");
-        info!("get retry {:?}", retry);
-        error!("{:?}", error);
-        if retry == 0 {
-            error!("源 {} 更新失败，暂停更新！", url);
-            panic!()
-        } else {
-            let interval = 15;
-            warn!("{} 秒后进行第 {} 次重试：{}", interval, 6 - retry, url);
-            retry -= 1;
-            sleep(Duration::from_secs(interval));
-            get(url, retry)
+fn get(url: &str, mut retry: i8) -> Result<Response, Box<dyn Error>> {
+    match reqwest::blocking::get(url) {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            if retry > 0 {
+                let interval = 15;
+                std::thread::sleep(Duration::from_secs(interval));
+                retry -= 1;
+                get(url, retry)
+            } else {
+                Err(Box::new(e))
+            }
         }
-    })
+    }
 }
 
 impl Rss {
-    #[must_use]
-    pub fn new(url: &str) -> Self {
+    pub fn new(url: &str) -> Result<Self, Box<dyn Error>> {
         let retry: i8 = 5;
-        let res = get(url, retry);
-        let body = res.text().expect("body 解析错误");
+        let res = get(url, retry)?;
+        let body = res.text()?;
 
-        from_str(&body).expect("xml 解析失败")
+        from_str(&body).map_err(|e| e.into())
     }
 }

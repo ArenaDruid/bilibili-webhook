@@ -6,7 +6,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN RUSTFLAGS="-C target-cpu=native" cargo build --release -q
+RUN RUSTFLAGS="-C target-cpu=x86-64" cargo build --release -q
 
 FROM alpine:latest
 
